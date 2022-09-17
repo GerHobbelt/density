@@ -238,9 +238,6 @@ DENSITY_FORCE_INLINE void density_lion_decode_256(const uint8_t **DENSITY_RESTRI
 }
 
 DENSITY_WINDOWS_EXPORT DENSITY_FORCE_INLINE density_algorithm_exit_status density_lion_decode(density_algorithm_state *const DENSITY_RESTRICT state, const uint8_t **DENSITY_RESTRICT in, const uint_fast64_t in_size, uint8_t **DENSITY_RESTRICT out, const uint_fast64_t out_size) {
-    if (out_size < DENSITY_LION_MAXIMUM_DECOMPRESSED_UNIT_SIZE)
-        return DENSITY_ALGORITHMS_EXIT_STATUS_OUTPUT_STALL;
-
     density_lion_signature signature = 0;
     density_lion_form_data data;
     density_lion_form_model_init(&data);
@@ -257,7 +254,7 @@ DENSITY_WINDOWS_EXPORT DENSITY_FORCE_INLINE density_algorithm_exit_status densit
         goto read_and_decode_4;
     }
 
-    const uint8_t *in_limit = *in + in_size - DENSITY_LION_MAXIMUM_COMPRESSED_UNIT_SIZE;
+    const uint8_t *in_limit = *in + in_size;
     uint8_t *out_limit = *out + out_size - DENSITY_LION_MAXIMUM_DECOMPRESSED_UNIT_SIZE;
 
     while (DENSITY_LIKELY(*in <= in_limit && *out <= out_limit)) {
@@ -274,9 +271,6 @@ DENSITY_WINDOWS_EXPORT DENSITY_FORCE_INLINE density_algorithm_exit_status densit
             DENSITY_ALGORITHM_TEST_INCOMPRESSIBILITY((*in - in_start), DENSITY_LION_WORK_BLOCK_SIZE);
         }
     }
-
-    if (*out > out_limit)
-        return DENSITY_ALGORITHMS_EXIT_STATUS_OUTPUT_STALL;
 
     read_and_decode_4:
     if (DENSITY_UNLIKELY(!shift)) {

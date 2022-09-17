@@ -178,9 +178,6 @@ DENSITY_FORCE_INLINE void density_cheetah_decode_read_signature(const uint8_t **
 }
 
 DENSITY_WINDOWS_EXPORT DENSITY_FORCE_INLINE density_algorithm_exit_status density_cheetah_decode(density_algorithm_state *const DENSITY_RESTRICT state, const uint8_t **DENSITY_RESTRICT in, const uint_fast64_t in_size, uint8_t **DENSITY_RESTRICT out, const uint_fast64_t out_size) {
-    if (out_size < DENSITY_CHEETAH_DECOMPRESSED_UNIT_SIZE)
-        return DENSITY_ALGORITHMS_EXIT_STATUS_OUTPUT_STALL;
-
     density_cheetah_signature signature;
     uint_fast8_t shift;
     uint_fast64_t remaining;
@@ -193,7 +190,7 @@ DENSITY_WINDOWS_EXPORT DENSITY_FORCE_INLINE density_algorithm_exit_status densit
         goto read_signature;
     }
 
-    const uint8_t *in_limit = *in + in_size - DENSITY_CHEETAH_MAXIMUM_COMPRESSED_UNIT_SIZE;
+    const uint8_t *in_limit = *in + in_size;
     uint8_t *out_limit = *out + out_size - DENSITY_CHEETAH_DECOMPRESSED_UNIT_SIZE;
 
     while (DENSITY_LIKELY(*in <= in_limit && *out <= out_limit)) {
@@ -211,9 +208,6 @@ DENSITY_WINDOWS_EXPORT DENSITY_FORCE_INLINE density_algorithm_exit_status densit
             DENSITY_ALGORITHM_TEST_INCOMPRESSIBILITY((*in - in_start), DENSITY_CHEETAH_WORK_BLOCK_SIZE);
         }
     }
-
-    if (*out > out_limit)
-        return DENSITY_ALGORITHMS_EXIT_STATUS_OUTPUT_STALL;
 
     read_signature:
     if (in_size - (*in - start) < sizeof(density_cheetah_signature))
