@@ -1,84 +1,66 @@
-use std::fs::read_to_string;
-use std::io;
+use crate::common::prepare_file;
+use divan;
 
-use divan::Bencher;
-
-use density::algorithms::chameleon::Chameleon;
-use density::algorithms::chameleon_writer::ChameleonWriter;
-use density::codec::Codec;
+mod common;
 
 fn main() {
+    // println!("{:?}", env::args().collect::<Vec<String>>());
+    prepare_file();
     divan::main();
 }
 
-fn compress_raw_safe(bencher: Bencher, path: &str) {
-    let in_memory_json = read_to_string(path).unwrap();
-    let input = in_memory_json.as_bytes();
-    let mut output = vec![0_u8; in_memory_json.len() << 1];
+#[divan::bench_group(sample_count = 25)]
+mod chameleon {
+    use crate::common::{DATA_DIRECTORY, TEST_FILE};
+    use density::algorithms::chameleon::chameleon::Chameleon;
+    use divan::counter::BytesCount;
+    use divan::Bencher;
+    use std::fs::read;
 
-    let mut chameleon = Chameleon::new();
-    match chameleon.encode_safe(input, &mut output) {
-        Ok(bytes) => { println!("{} bytes", bytes) }
-        Err(_) => { assert!(false); }
+    #[divan::bench(name = "compress/raw")]
+    fn encode_raw(bencher: Bencher) {
+        let in_mem = read(&format!("{}{}", DATA_DIRECTORY, TEST_FILE)).unwrap();
+        let mut out_mem = vec![0_u8; in_mem.len() << 1];
+
+        print!("\r\t\t\t({:.3}x)   ", in_mem.len() as f64 / Chameleon::encode(&in_mem, &mut out_mem).unwrap() as f64);
+
+        bencher
+            .counter(BytesCount::of_slice(&in_mem))
+            .bench_local(|| { Chameleon::encode(&in_mem, &mut out_mem) });
     }
 
-    bencher.bench_local(move || {
-        let mut chameleon = Chameleon::new();
-        chameleon.encode_safe(input, &mut output)
-    });
+    #[divan::bench(name = "decompress/raw")]
+    fn decode_raw(bencher: Bencher) {
+        let in_mem = read(&format!("{}{}", DATA_DIRECTORY, TEST_FILE)).unwrap();
+        let mut out_mem = vec![0_u8; in_mem.len() << 1];
+        let size = Chameleon::encode(&in_mem, &mut out_mem).unwrap();
+        let mut dec_mem = vec![0_u8; in_mem.len() << 1];
 
-    // assert!(std::io::copy(&mut input, &mut ChameleonWriter::new(&mut output)).is_ok());
-    // bencher.with_inputs(|| {
-    //     let binding = vec![0; in_memory_json.len() << 1];
-    //     (in_memory_json.to_owned(), binding)
-    // }).bench_local_values(move |(input, mut output)| {
-    //     io::copy(&mut input.as_bytes(), &mut ChameleonWriter::new(&mut output))
-    // });
-}
+        print!("\r\t\t\t({:.3}x)   ", in_mem.len() as f64 / Chameleon::decode(&out_mem[0..size], &mut dec_mem).unwrap() as f64);
 
-fn compress_raw_unsafe(bencher: Bencher, path: &str) {
-    let in_memory_json = read_to_string(path).unwrap();
-    let input = in_memory_json.as_bytes();
-    let mut output = vec![0_u8; in_memory_json.len() << 1];
-
-    let mut chameleon = Chameleon::new();
-    match unsafe { chameleon.encode_unsafe(input, &mut output) } {
-        Ok(bytes) => { println!("{} bytes", bytes) }
-        Err(_) => { assert!(false); }
+        bencher
+            .counter(BytesCount::of_slice(&in_mem))
+            .bench_local(|| { Chameleon::decode(&out_mem[0..size], &mut dec_mem) });
     }
-
-    bencher.bench_local(move || {
-        let mut chameleon = Chameleon::new();
-        unsafe { chameleon.encode_unsafe(input, &mut output) }
-    });
 }
 
-fn compress_stream_safe(bencher: Bencher, path: &str) {
-    let in_memory_json = read_to_string(path).unwrap();
-    let mut input = in_memory_json.as_bytes();
-    let mut output = Vec::with_capacity(in_memory_json.len() << 1); // vec![0_u8; in_memory_json.len() << 1]; // Vec::new();//
+#[divan::bench_group(sample_count = 25)]
+mod cheetah {
+    use crate::common::{DATA_DIRECTORY, TEST_FILE};
+    use density::algorithms::cheetah::cheetah::Cheetah;
+    use divan::counter::BytesCount;
+    use divan::Bencher;
+    use std::fs::read;
 
-    assert!(std::io::copy(&mut input, &mut ChameleonWriter::new(&mut output)).is_ok());
-    println!("{} bytes", output.len());
-    bencher.with_inputs(|| {
-        let binding = Vec::with_capacity(in_memory_json.len() << 1);
-        (in_memory_json.to_owned(), binding)
-    }).bench_local_values(move |(input, mut output)| {
-        io::copy(&mut input.as_bytes(), &mut ChameleonWriter::new(&mut output))
-    });
-}
+    #[divan::bench(name = "compress/raw")]
+    fn encode_raw(bencher: Bencher) {
+        let in_mem = read(&format!("{}{}", DATA_DIRECTORY, TEST_FILE)).unwrap();
+        let mut out_mem = vec![0_u8; in_mem.len() << 1];
 
-#[divan::bench(args = ["benches/data/enwik8"])]
-fn encode_raw_safe(bencher: Bencher, path: &str) {
-    compress_raw_safe(bencher, path);
-}
+        print!("\r\t\t\t({:.3}x)   ", in_mem.len() as f64 / Cheetah::encode(&in_mem, &mut out_mem).unwrap() as f64);
 
-#[divan::bench(args = ["benches/data/enwik8"])]
-fn encode_raw_unsafe(bencher: Bencher, path: &str) {
-    compress_raw_unsafe(bencher, path);
-}
-
-#[divan::bench(args = ["benches/data/enwik8"])]
-fn encode_stream_safe(bencher: Bencher, path: &str) {
-    compress_stream_safe(bencher, path);
+        bencher
+            .counter(BytesCount::of_slice(&in_mem))
+            .bench_local(|| { Cheetah::encode(&in_mem, &mut out_mem) });
+    }
 }
