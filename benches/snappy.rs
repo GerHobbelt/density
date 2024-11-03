@@ -1,58 +1,72 @@
-use crate::common::prepare_file;
+use crate::utils::file_path;
 
-mod common;
+mod utils;
 
 fn main() {
-    prepare_file();
+    file_path(true);
     divan::main();
 }
 
 #[divan::bench_group(sample_count = 25)]
-mod snappy {
-    use crate::common::{DATA_DIRECTORY, TEST_FILE};
+mod default {
+    use crate::utils::file_path;
     use divan::counter::BytesCount;
     use divan::Bencher;
+    use snap::read::FrameDecoder;
     use snap::write::FrameEncoder;
     use std::fs::read;
     use std::io;
+    use std::io::Write;
 
     #[divan::bench(name = "compress/stream            ")]
     fn encode_stream(bencher: Bencher) {
-        let in_mem = read(&format!("{}{}", DATA_DIRECTORY, TEST_FILE)).unwrap();
-        let capacity = in_mem.len() << 1;
-        let mut out_mem = Vec::with_capacity(capacity);
+        let file_mem = read(file_path(false)).unwrap();
+        let capacity = file_mem.len() << 1;
+        let mut encoded_mem = Vec::with_capacity(capacity);
 
-        let mut writer = FrameEncoder::new(&mut out_mem);
-        io::copy(&mut in_mem.as_slice(), &mut writer).unwrap();
+        let mut encoder = FrameEncoder::new(&mut encoded_mem);
+        io::copy(&mut file_mem.as_slice(), &mut encoder).unwrap();
+        encoder.flush().unwrap();
 
-        print!("\r\t\t\t({:.3}x)   ", in_mem.len() as f64 / writer.get_ref().len() as f64);
+        print!("\r\t\t\t\x1b[1m\x1b[34m({:.3}x)\x1b[0m   ", file_mem.len() as f64 / encoder.get_ref().len() as f64);
 
         bencher
-            .counter(BytesCount::of_slice(&in_mem))
-            .with_inputs(|| { (in_mem.as_slice(), Vec::with_capacity(capacity)) })
+            .counter(BytesCount::of_slice(&file_mem))
+            .with_inputs(|| { (file_mem.as_slice(), Vec::with_capacity(capacity)) })
             .bench_local_values(|(mut input, mut output)| {
                 io::copy(&mut input, &mut FrameEncoder::new(&mut output))
             });
     }
+
+    #[divan::bench(name = "decompress/stream          ")]
+    fn decode_raw(bencher: Bencher) {
+        let file_mem = read(file_path(false)).unwrap();
+        let capacity = file_mem.len() << 1;
+        let mut encoded_mem = Vec::with_capacity(capacity);
+        let mut decoded_mem = Vec::with_capacity(capacity);
+
+        let encoded_size = {
+            let mut encoder = FrameEncoder::new(&mut encoded_mem);
+            io::copy(&mut file_mem.as_slice(), &mut encoder).unwrap();
+            encoder.flush().unwrap();
+            encoder.get_ref().len()
+        };
+
+        let decoded_size = {
+            let mut decoder = FrameDecoder::new(&encoded_mem[0..encoded_size]);
+            io::copy(&mut decoder, &mut decoded_mem).unwrap() as usize
+        };
+
+        assert_eq!(file_mem.len(), decoded_size);
+        for i in 0..decoded_size {
+            assert_eq!(file_mem[i], decoded_mem[i]);
+        }
+
+        bencher
+            .counter(BytesCount::of_slice(&file_mem))
+            .with_inputs(|| { (&encoded_mem[0..encoded_size], Vec::with_capacity(capacity)) })
+            .bench_local_values(|(mut input, mut output)| {
+                io::copy(&mut FrameDecoder::new(&mut input), &mut output)
+            });
+    }
 }
-//
-// fn encode_stream(c: &mut Criterion) {
-//     for path in TEST_FILES {
-//         let in_mem = read(&format!("{}{}", DATA_DIRECTORY, path)).unwrap();
-//         let mut out_mem = Vec::with_capacity(in_mem.len() << 1);
-//
-//         io::copy(&mut in_mem.as_slice(), &mut snap::write::FrameEncoder::new(&mut out_mem)).unwrap();
-//
-//         let mut group = c.benchmark_group("snappy");
-//         group.sampling_mode(SamplingMode::Flat);
-//         group.sample_size(10);
-//         group.throughput(Throughput::Bytes(in_mem.len() as u64));
-//         group.bench_function(&format!("encode_stream {} ({} bytes => {} bytes)", path, in_mem.len(), out_mem.len()), |b| b.iter(|| {
-//             io::copy(&mut in_mem.as_slice(), &mut snap::write::FrameEncoder::new(&mut Vec::with_capacity(in_mem.len() << 1)))
-//         }));
-//         group.finish();
-//     }
-// }
-//
-// criterion_group!(benches, encode_stream);
-// criterion_main!(benches);

@@ -1,3 +1,4 @@
+#[derive(Debug)]
 pub struct WriteSignature {
     pub(crate) pos: usize,
     pub(crate) value: u64,
@@ -5,8 +6,8 @@ pub struct WriteSignature {
 }
 
 impl WriteSignature {
-    pub fn new(pos: usize) -> Self {
-        WriteSignature { pos, value: 0, shift: 0 }
+    pub fn new() -> Self {
+        WriteSignature { pos: 0, value: 0, shift: 0 }
     }
 
     #[inline(always)]
