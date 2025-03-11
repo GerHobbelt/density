@@ -11,7 +11,7 @@ It is focused on high-speed compression, at the best ratio possible. **Density**
 [![MIT licensed](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE-MIT)
 [![Apache-2.0 licensed](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE-APACHE)
 [![Crates.io](https://img.shields.io/crates/v/density-rs.svg?maxAge=2592000)](https://crates.io/crates/density-rs)
-[![Build Status](https://github.com/g1mv/density-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/g1mv/density-rs/actions)
+[![Build Status](https://github.com/g1mv/density/actions/workflows/ci.yml/badge.svg)](https://github.com/g1mv/density/actions)
 
 Why is it so fast ?
 -------------------
@@ -130,11 +130,13 @@ use density_rs::algorithms::chameleon::chameleon::Chameleon;
 fn main() {
     let file_mem = read("file_path").unwrap();
 
-    let mut encoded_mem = vec![0_u8; file_mem.len() << 1];
-    let encoded_size = Chameleon::encode(&file_mem, &mut encoded_mem).unwrap();
-
-    let mut decoded_mem = vec![0_u8; file_mem.len() << 1];
-    let decoded_size = Chameleon::decode(&encoded_mem[0..encoded_size], &mut decoded_mem).unwrap();
+    let mut chameleon = Chameleon::new();
+    let mut encoded_mem = vec![0_u8; chameleon.safe_encode_buffer_size(file_mem.len())];
+    let encoded_size = chameleon.encode(&file_mem, &mut encoded_mem).unwrap();
+      
+    chameleon.clear_state();
+    let mut decoded_mem = vec![0_u8; file_mem.len()];
+    let decoded_size = chameleon.decode(&encoded_mem[0..encoded_size], &mut decoded_mem).unwrap();
 }
 ```
 
