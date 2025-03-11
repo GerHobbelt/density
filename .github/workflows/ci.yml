@@ -1,5 +1,4 @@
 name: CI
-
 on:
   push:
   pull_request:
@@ -7,29 +6,81 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
-jobs:
-  test_little_endian:
-    name: Test on Little-Endian (x86_64)
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
-          - beta
-          - nightly
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: cargo build --verbose
-      - run: cargo test --verbose
+permissions:
+  contents: read
 
-  test_big_endian:
-    name: Test on Big-Endian (s390x)
-    runs-on: ubuntu-latest
-    container:
-      image: s390x/rust:latest
+jobs:
+  test:
+    name: test
+    env:
+      CARGO: cargo
+      TARGET:
+      CROSS_VERSION: v0.2.5
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build: stable
+            os: ubuntu-latest
+            toolchain: stable
+          - build: beta
+            os: ubuntu-latest
+            toolchain: beta
+          - build: nightly
+            os: ubuntu-latest
+            toolchain: nightly
+          - build: macos
+            os: macos-latest
+            toolchain: stable
+          - build: win-msvc
+            os: windows-latest
+            toolchain: stable
+          - build: win-gnu
+            os: windows-latest
+            toolchain: stable-x86_64-gnu
+          - build: stable-x86
+            os: ubuntu-latest
+            toolchain: stable
+            target: i686-unknown-linux-gnu
+          - build: stable-aarch64
+            os: ubuntu-latest
+            toolchain: stable
+            target: aarch64-unknown-linux-gnu
+          - build: stable-powerpc64
+            os: ubuntu-latest
+            toolchain: stable
+            target: powerpc64-unknown-linux-gnu
+          - build: stable-s390x
+            os: ubuntu-latest
+            toolchain: stable
+            target: s390x-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v4
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: cargo build --verbose
-      - run: cargo test --verbose
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+      - name: Use cross
+        if: matrix.os == 'ubuntu-latest' && matrix.target != ''
+        run: |
+          dir="$RUNNER_TEMP/cross-download"
+          mkdir "$dir"
+          echo "$dir" >> $GITHUB_PATH
+          cd "$dir"
+          curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
+          tar xf cross-x86_64-unknown-linux-musl.tar.gz
+          echo "CARGO=cross" >> $GITHUB_ENV
+          echo "TARGET=--target ${{ matrix.target }}" >> $GITHUB_ENV
+      - name: Show CPU info
+        if: matrix.os == 'ubuntu-latest'
+        run: lscpu
+      - name: Build
+        run: cargo build --verbose $TARGET
+      - name: Build docs
+        run: cargo doc --verbose $TARGET
+      - name: Test
+        run: cargo test --verbose $TARGET
